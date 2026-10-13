@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Website Editor | Suyog Enterprises</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#F4F0E8">
+  <link rel="icon" type="image/png" href="assets/brand/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="adm">
+
+<!-- ===== login ===== -->
+<main class="adm-login" id="loginView" hidden>
+  <form class="card adm-login-card" id="loginForm" novalidate>
+    <img src="assets/brand/logo.jpg" alt="" width="84" height="84" class="adm-login-logo">
+    <h1>Website Editor</h1>
+    <p class="adm-muted">Suyog Enterprises · Bags since 1989</p>
+    <div class="field"><label for="lPhone">Mobile number</label><input id="lPhone" name="phone" type="tel" inputmode="tel" autocomplete="username" placeholder="10-digit mobile number" required></div>
+    <div class="field"><label for="lPass">Password</label><input id="lPass" name="password" type="password" autocomplete="current-password" required></div>
+    <p class="adm-error" id="loginError" role="alert" hidden></p>
+    <button class="btn btn-block" type="submit" id="loginBtn">Log in</button>
+    <a class="adm-back" href="/">← Back to website</a>
+  </form>
+</main>
+
+<!-- ===== editor ===== -->
+<div class="adm-app" id="appView" hidden>
+  <header class="adm-bar">
+    <div class="adm-bar-in">
+      <a class="adm-brand" href="/" target="_blank" rel="noopener">
+        <img src="assets/brand/logo.jpg" alt="" width="40" height="40">
+        <span><b>Website Editor</b><i>Suyog Enterprises</i></span>
+      </a>
+      <div class="adm-bar-actions">
+        <span class="adm-status" id="saveStatus" role="status">All changes saved</span>
+        <a class="btn btn-sm btn-ghost" href="/" target="_blank" rel="noopener">View site</a>
+        <button class="btn btn-sm" type="button" id="saveBtn" disabled>Save changes</button>
+        <button class="btn btn-sm btn-ghost" type="button" id="logoutBtn">Log out</button>
+      </div>
+    </div>
+    <nav class="adm-tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" data-tab="products" aria-selected="true">Bags <span id="nProducts"></span></button>
+      <button type="button" role="tab" data-tab="categories" aria-selected="false">Categories <span id="nCategories"></span></button>
+      <button type="button" role="tab" data-tab="services" aria-selected="false">Services <span id="nServices"></span></button>
+      <button type="button" role="tab" data-tab="gallery" aria-selected="false">Gallery <span id="nGallery"></span></button>
+      <button type="button" role="tab" data-tab="reviews" aria-selected="false">Reviews <span id="nReviews"></span></button>
+      <button type="button" role="tab" data-tab="texts" aria-selected="false">Texts</button>
+      <button type="button" role="tab" data-tab="contact" aria-selected="false">Contact &amp; hours</button>
+    </nav>
+  </header>
+
+  <main class="adm-main">
+    <!-- bags -->
+    <section data-panel="products">
+      <div class="adm-head">
+        <div><h2>Bags &amp; prices</h2><p class="adm-muted">Change names, categories and prices, replace photos, or add new bags. Type a number in the <b>#</b> box to move a bag to that position; #1 shows first on the website. Price 0 shows "Price on request".</p></div>
+        <div class="adm-head-tools">
+          <select id="pCat" aria-label="Show category"></select>
+          <input type="search" id="pSearch" placeholder="Search name or colour" aria-label="Search bags">
+          <button class="btn" type="button" id="addProduct">+ Add bag</button>
+        </div>
+      </div>
+      <div class="adm-grid" id="productList"></div>
+    </section>
+
+    <!-- categories -->
+    <section data-panel="categories" hidden>
+      <div class="adm-head">
+        <div><h2>Categories</h2><p class="adm-muted">These are the filter buttons above the bags on the website, in this order. Rename them, change the order with the <b>#</b> box, or add a new one.</p></div>
+      </div>
+      <div class="card adm-panel">
+        <div class="adm-cat-list" id="categoryList"></div>
+        <form class="adm-cat-add" id="addCategoryForm">
+          <input id="newCategory" maxlength="30" placeholder="New category name, e.g. Kids Trolleys" aria-label="New category name">
+          <button class="btn" type="submit">+ Add category</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- services -->
+    <section data-panel="services" hidden>
+      <div class="adm-head">
+        <div><h2>Services</h2><p class="adm-muted">Change service names, descriptions and photos, add new services, or delete ones you no longer offer. Use the <b>#</b> box to set the order.</p></div>
+        <div class="adm-head-tools">
+          <button class="btn" type="button" id="addService">+ Add service</button>
+        </div>
+      </div>
+      <div class="adm-grid" id="serviceList"></div>
+    </section>
+
+    <!-- gallery -->
+    <section data-panel="gallery" hidden>
+      <div class="adm-head">
+        <div><h2>Gallery</h2><p class="adm-muted">Photos #1 to #10 appear on the home page; all of them appear on the Gallery page. Use the <b>#</b> box to set the order.</p></div>
+        <div class="adm-head-tools">
+          <label class="btn" for="galleryFiles">+ Add photos</label>
+          <input type="file" id="galleryFiles" accept="image/*" multiple hidden>
+        </div>
+      </div>
+      <div class="adm-grid adm-grid-gal" id="galleryList"></div>
+    </section>
+
+    <!-- reviews -->
+    <section data-panel="reviews" hidden>
+      <div class="adm-head">
+        <div><h2>Customer reviews</h2><p class="adm-muted">Shown in the Testimonials section. Use real reviews from your customers. If you delete them all, the section is hidden.</p></div>
+        <div class="adm-head-tools">
+          <button class="btn" type="button" id="addReview">+ Add review</button>
+        </div>
+      </div>
+      <div class="adm-grid adm-grid-wide" id="reviewList"></div>
+    </section>
+
+    <!-- texts -->
+    <section data-panel="texts" hidden>
+      <div class="adm-head">
+        <div><h2>Website texts</h2><p class="adm-muted">Edit the words on the website. "Reset" brings back the original text.</p></div>
+      </div>
+      <div class="adm-text-groups" id="textList"></div>
+    </section>
+
+    <!-- contact & hours -->
+    <section data-panel="contact" hidden>
+      <div class="adm-head">
+        <div><h2>Contact &amp; hours</h2><p class="adm-muted">Every WhatsApp button, call button, email link and the WhatsApp QR code on the website use these details.</p></div>
+      </div>
+      <div class="adm-contact-grid">
+        <div class="card adm-panel" id="contactPanel"></div>
+        <div class="card adm-panel" id="hoursPanel"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="adm-loading" id="loadingView"><span></span></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/content-defaults.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
