@@ -104,6 +104,87 @@
     });
   }
 
+  /* ---------- multi-select + delete ----------
+     Every card has a tick box; a bar above each list has "Select all" and "Delete selected".
+     Selections are kept as the item objects themselves, so they survive re-ordering and re-rendering. */
+  const SEL = { products: new Set(), categories: new Set(), services: new Set(), gallery: new Set(), testimonials: new Set() };
+  const selBars = [];
+  const isSel = (key, item) => SEL[key].has(item);
+  const selBox = (key, item) =>
+    `<label class="adm-sel" title="Select for deleting"><input type="checkbox" data-sel aria-label="Select"${isSel(key, item) ? ' checked' : ''}></label>`;
+  const selCls = (key, item) => (isSel(key, item) ? ' is-selected' : '');
+
+  function refreshSelBars() {
+    if (!state) return;
+    // keep the bar just under the sticky header, whatever its height on this screen
+    document.documentElement.style.setProperty('--adm-bar-h', $('.adm-bar').offsetHeight + 'px');
+    selBars.forEach(({ bar, set, getList, container }) => {
+      const all = getList();
+      Array.from(set).forEach(x => { if (!all.includes(x)) set.delete(x); });
+      const boxes = $$('[data-sel]', container), on = boxes.filter(b => b.checked).length;
+      bar.hidden = !boxes.length;
+      const allBox = $('[data-sel-all]', bar);
+      allBox.checked = !!boxes.length && on === boxes.length;
+      allBox.indeterminate = on > 0 && on < boxes.length;
+      $('.adm-sel-count', bar).textContent = set.size ? `${set.size} selected` : '';
+      const del = $('[data-sel-del]', bar);
+      del.hidden = !set.size; del.textContent = `Delete ${set.size} selected`;
+    });
+  }
+
+  // cfg: container, getList, render, noun, nouns, [check(items) -> error text], [text(items) -> confirm text], [before(items)]
+  function wireSelect(key, cfg) {
+    const { container, getList, noun, nouns } = cfg, set = SEL[key];
+    container.insertAdjacentHTML('beforebegin',
+      `<div class="adm-selbar" hidden>
+        <label class="adm-sel-all"><input type="checkbox" data-sel-all> <span>Select all</span></label>
+        <span class="adm-sel-count" role="status" aria-live="polite"></span>
+        <button type="button" class="adm-sel-del" data-sel-del hidden></button>
+      </div>`);
+    const bar = container.previousElementSibling;
+    selBars.push({ bar, set, getList, container });
+
+    const itemOf = box => getList()[+box.closest('[data-i]').dataset.i];
+    const mark = (box, on) => box.closest('[data-i]').classList.toggle('is-selected', on);
+
+    container.addEventListener('change', e => {
+      if (!e.target.matches('[data-sel]')) return;
+      const item = itemOf(e.target); if (!item) return;
+      if (e.target.checked) set.add(item); else set.delete(item);
+      mark(e.target, e.target.checked);
+      refreshSelBars();
+    });
+    bar.addEventListener('change', e => {
+      if (!e.target.matches('[data-sel-all]')) return;
+      $$('[data-sel]', container).forEach(box => {
+        const item = itemOf(box); if (!item) return;
+        box.checked = e.target.checked;
+        if (box.checked) set.add(item); else set.delete(item);
+        mark(box, box.checked);
+      });
+      refreshSelBars();
+    });
+    bar.addEventListener('click', e => {
+      if (!e.target.closest('[data-sel-del]')) return;
+      const list = getList();
+      const picked = list.filter(x => set.has(x));
+      const items = picked.filter(x => !x._busy);                 // photos still uploading can't be deleted yet
+      if (picked.length > items.length) toast('Photos that are still uploading were skipped.', 3500);
+      if (!items.length) return;
+      const err = cfg.check && cfg.check(items);
+      if (err) return toast(err, 4000);
+      const k = items.length;
+      const text = cfg.text ? cfg.text(items) : `Delete ${k} ${k === 1 ? noun : nouns}? ${k === 1 ? 'It' : 'They'} will disappear from the website after you save.`;
+      if (!confirm(text)) return;
+      if (cfg.before) cfg.before(items);
+      const gone = new Set(items);
+      for (let i = list.length - 1; i >= 0; i--) if (gone.has(list[i])) list.splice(i, 1);
+      gone.forEach(x => set.delete(x));
+      cfg.render();
+      toast(`${k} ${k === 1 ? noun : nouns} deleted. Remember to save.`);
+    });
+  }
+
   /* ---------- images: shrink in the browser, then upload ---------- */
   function decode(file) {
     if ('createImageBitmap' in window) {
@@ -168,6 +249,7 @@
     $('#nServices').textContent = state ? state.services.length : '';
     $('#nGallery').textContent = state ? state.gallery.length : '';
     $('#nReviews').textContent = state ? state.testimonials.length : '';
+    refreshSelBars();
   }
 
   function goTo(tab, container, i, msg) {
@@ -237,10 +319,11 @@
   function productCard(p, i) {
     const n = state.products.length, known = state.categories.some(c => c.id === p.cat);
     return `
-      <article class="card adm-item${p._new ? ' is-new' : ''}" data-i="${i}">
+      <article class="card adm-item${p._new ? ' is-new' : ''}${selCls('products', p)}" data-i="${i}">
         <div class="adm-photo${p.img ? '' : ' empty'}">
           ${p.img ? `<img src="${esc(p._preview || p.img)}" alt="" loading="lazy">` : '<span>No photo yet.<br>Tap “Add photo”.</span>'}
           ${posBox(i, n)}
+          ${selBox('products', p)}
           ${p._busy ? '<span class="adm-busy">Uploading…</span>' : ''}
           <div class="adm-photo-tools">
             <button type="button" class="adm-chip" data-act="photo">${p.img ? 'Change photo' : 'Add photo'}</button>
@@ -272,6 +355,9 @@
     const q = $('#pSearch').value.trim().toLowerCase(), cat = $('#pCat').value;
     const items = state.products.map((p, i) => [p, i])
       .filter(([p]) => (!cat || p.cat === cat) && (!q || `${p.name} ${p.note} ${catName(p.cat)}`.toLowerCase().includes(q)));
+    // only bags on screen can stay selected, so "Delete selected" never removes something you can't see
+    const shownSet = new Set(items.map(([p]) => p));
+    Array.from(SEL.products).forEach(p => { if (!shownSet.has(p)) SEL.products.delete(p); });
     $('#productList').innerHTML = items.length
       ? items.map(([p, i]) => productCard(p, i)).join('')
       : '<p class="adm-empty">No bags match. Try another category or search.</p>';
@@ -280,6 +366,7 @@
   $('#pSearch').addEventListener('input', renderProducts);
   $('#pCat').addEventListener('change', renderProducts);
   wirePositions($('#productList'), () => state.products, renderProducts, 'Bag');
+  wireSelect('products', { container: $('#productList'), getList: () => state.products, render: renderProducts, noun: 'bag', nouns: 'bags' });
 
   $('#productList').addEventListener('input', e => {
     const f = e.target.dataset.f; if (!f) return;
@@ -329,7 +416,8 @@
     $('#categoryList').innerHTML = state.categories.map((c, i) => {
       const k = count(c.id);
       return `
-        <div class="adm-cat-row" data-i="${i}">
+        <div class="adm-cat-row${selCls('categories', c)}" data-i="${i}">
+          ${selBox('categories', c)}
           ${posBox(i, n)}
           <input class="adm-cat-name" data-f="name" value="${esc(c.name)}" maxlength="30" aria-label="Category name">
           <button type="button" class="adm-cat-count" data-act="view" title="Show these bags">${k} bag${k === 1 ? '' : 's'}</button>
@@ -339,6 +427,24 @@
     updateStatus();
   }
   wirePositions($('#categoryList'), () => state.categories, () => { renderCategories(); renderProducts(); }, 'Category');
+  // bags in the deleted categories move to the first category that stays
+  const catHeir = items => state.categories.find(c => !items.includes(c));
+  wireSelect('categories', {
+    container: $('#categoryList'), getList: () => state.categories, noun: 'category', nouns: 'categories',
+    render: () => { renderCategories(); renderProducts(); },
+    check: items => (items.length >= state.categories.length ? 'Keep at least one category.' : ''),
+    text: items => {
+      const ids = new Set(items.map(c => c.id)), bags = state.products.filter(p => ids.has(p.cat)).length;
+      const what = items.length === 1 ? `the category "${items[0].name}"` : `${items.length} categories`;
+      return bags
+        ? `Delete ${what}? Their ${bags} bag${bags === 1 ? '' : 's'} will move to "${catHeir(items).name}". You can change them later.`
+        : `Delete ${what}? ${items.length === 1 ? 'It is' : 'They are'} empty.`;
+    },
+    before: items => {
+      const ids = new Set(items.map(c => c.id)), heir = catHeir(items);
+      state.products.forEach(p => { if (ids.has(p.cat)) p.cat = heir.id; });
+    }
+  });
   $('#categoryList').addEventListener('input', e => {
     if (e.target.dataset.f !== 'name') return;
     state.categories[+e.target.closest('[data-i]').dataset.i].name = e.target.value;
@@ -384,10 +490,11 @@
   function serviceCard(s, i) {
     const n = state.services.length;
     return `
-      <article class="card adm-item${s._new ? ' is-new' : ''}" data-i="${i}">
+      <article class="card adm-item${s._new ? ' is-new' : ''}${selCls('services', s)}" data-i="${i}">
         <div class="adm-photo${s.img ? '' : ' empty'}">
           ${s.img ? `<img src="${esc(s.img)}" alt="" loading="lazy">` : '<span>No photo yet.<br>Tap “Add photo”.</span>'}
           ${posBox(i, n)}
+          ${selBox('services', s)}
           ${s._busy ? '<span class="adm-busy">Uploading…</span>' : ''}
           <div class="adm-photo-tools">
             <button type="button" class="adm-chip" data-act="photo">${s.img ? 'Change photo' : 'Add photo'}</button>
@@ -409,6 +516,7 @@
     updateStatus();
   }
   wirePositions($('#serviceList'), () => state.services, renderServices, 'Service');
+  wireSelect('services', { container: $('#serviceList'), getList: () => state.services, render: renderServices, noun: 'service', nouns: 'services' });
 
   $('#serviceList').addEventListener('input', e => {
     const f = e.target.dataset.f; if (!f) return;
@@ -451,10 +559,11 @@
     const n = state.gallery.length;
     const bg = /^#[0-9a-f]{3,8}$/i.test(g.bg || '') ? `background:${g.bg}` : '';
     return `
-      <article class="card adm-item" data-i="${i}">
+      <article class="card adm-item${selCls('gallery', g)}" data-i="${i}">
         <div class="adm-photo" style="${bg}">
           <img src="${esc(g._preview || g.thumb)}" alt="" loading="lazy" style="object-fit:${g.fit === 'contain' ? 'contain' : 'cover'}">
           ${posBox(i, n, i < 10 ? '<em>home</em>' : '')}
+          ${selBox('gallery', g)}
           ${g._busy ? '<span class="adm-busy">Uploading…</span>' : ''}
           <div class="adm-photo-tools">
             <button type="button" class="adm-chip" data-act="fit">${g.fit === 'contain' ? 'Whole photo' : 'Fill frame'}</button>
@@ -475,6 +584,7 @@
     updateStatus();
   }
   wirePositions($('#galleryList'), () => state.gallery, renderGallery, 'Photo');
+  wireSelect('gallery', { container: $('#galleryList'), getList: () => state.gallery, render: renderGallery, noun: 'photo', nouns: 'photos' });
   $('#galleryList').addEventListener('input', e => {
     if (e.target.dataset.f !== 'alt') return;
     state.gallery[+e.target.closest('[data-i]').dataset.i].alt = e.target.value;
@@ -524,9 +634,9 @@
   function reviewCard(t, i) {
     const n = state.testimonials.length, r = t.r || 5;
     return `
-      <article class="card adm-item adm-review${t._new ? ' is-new' : ''}" data-i="${i}">
+      <article class="card adm-item adm-review${t._new ? ' is-new' : ''}${selCls('testimonials', t)}" data-i="${i}">
         <div class="adm-review-top">
-          ${posBox(i, n)}
+          <div class="adm-review-lead">${selBox('testimonials', t)}${posBox(i, n)}</div>
           <div class="adm-stars" role="group" aria-label="Stars">
             ${[1, 2, 3, 4, 5].map(k => `<button type="button" data-star="${k}" class="${k <= r ? 'on' : ''}" aria-label="${k} star${k > 1 ? 's' : ''}" aria-pressed="${k === r}">★</button>`).join('')}
           </div>
@@ -547,6 +657,7 @@
     updateStatus();
   }
   wirePositions($('#reviewList'), () => state.testimonials, renderReviews, 'Review');
+  wireSelect('testimonials', { container: $('#reviewList'), getList: () => state.testimonials, render: renderReviews, noun: 'review', nouns: 'reviews' });
   $('#reviewList').addEventListener('input', e => {
     const f = e.target.dataset.f; if (!f) return;
     const card = e.target.closest('[data-i]');
@@ -736,6 +847,7 @@
       contact: Object.assign({}, base.contact, c.contact || {})
     };
     sameCall = state.contact.phone === state.contact.whatsapp;
+    Object.values(SEL).forEach(s => s.clear());
     // nothing saved yet (or saved before these settings existed): count as unsaved so Save stores everything
     savedSnap = content && c.categories && c.hours && c.contact && c.testimonials ? snap() : '';
     renderProducts(); renderCategories(); renderServices(); renderGallery(); renderReviews(); renderTexts(); renderContact(); renderHours();
